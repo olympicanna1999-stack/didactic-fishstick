@@ -103,7 +103,6 @@ def main():
         
         # Навигация
         st.subheader("📋 Навигация")
-        st.page_link("app.py", label="🏠 Главная", icon="🏠")
         
         if user['role'] in ['admin', 'curator']:
             st.page_link("pages/1_База_спортсменов.py", label="👥 База спортсменов", icon="👥")
