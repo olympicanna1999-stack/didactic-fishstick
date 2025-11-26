@@ -1,122 +1,17 @@
-"""
-Модуль работы с базой данных PostgreSQL (ИСПРАВЛЕННЫЙ ДЛЯ SUPABASE)
-Цифровой реестр олимпийского резерва
-"""
-
-import streamlit as st
-import pandas as pd
-import psycopg2
-from psycopg2 import sql
-import os
-from dotenv import load_dotenv
-
-# Загружаем переменные окружения
-load_dotenv()
-
-@st.cache_resource
-def get_db_connection():
-    """
-    Получение подключения к PostgreSQL с кэшированием
-    ИСПРАВЛЕНО: Использует параметры из secrets.toml (Streamlit Cloud)
-    
-    Returns:
+ Returns:
         Подключение к БД (psycopg2 connection object)
     """
     try:
-        # ====== ПРИОРИТЕТ 1: Streamlit secrets.toml (Streamlit Cloud) ======
-        if hasattr(st, 'secrets') and 'connections' in st.secrets:
-            try:
-                db_config = st.secrets.connections.postgresql
-                
-                host = db_config.get('host')
-                port = db_config.get('port', 5432)
-                database = db_config.get('database')
-                user = db_config.get('username')
-                password = db_config.get('password')
-                
-                # Дополнительная проверка - не должен быть localhost
-                if host == 'localhost' or host == '127.0.0.1':
-                    st.error("""
-                    ⚠️ **ОШИБКА КОНФИГУРАЦИИ!**
-                    
-                    В secrets.toml указан `host = "localhost"`, но это недопустимо на Streamlit Cloud!
-                    
-                    **Что нужно сделать:**
-                    1. Откройте https://supabase.com и создайте проект
-                    2. Скопируйте Connection string (Settings → Database)
-                    3. На Streamlit Cloud (⚙️ Settings → Secrets) вставьте:
-                    
-                    ```toml
-                    [connections.postgresql]
-                    host = "db.YOUR-ID.supabase.co"
-                    port = 5432
-                    database = "postgres"
-                    username = "postgres"
-                    password = "YOUR_PASSWORD"
-                    ```
-                    
-                    ❌ НЕПРАВИЛЬНО: host = "localhost"
-                    ✅ ПРАВИЛЬНО: host = "db.XXXXX.supabase.co"
-                    """)
-                    st.stop()
-                
-                conn = psycopg2.connect(
-                    host=host,
-                    port=port,
-                    database=database,
-                    user=user,
-                    password=password,
-                    connect_timeout=10
-                )
-                return conn
-            
-            except KeyError as e:
-                st.error(f"""
-                ❌ **Ошибка конфигурации secrets.toml!**
-                
-                Отсутствует параметр: {e}
-                
-                Убедитесь что в Streamlit Cloud (⚙️ Settings → Secrets) есть:
-                
-                ```toml
-                [connections.postgresql]
-                host = "db.YOUR-ID.supabase.co"
-                port = 5432
-                database = "postgres"
-                username = "postgres"
-                password = "YOUR_PASSWORD"
-                ```
-                """)
-                st.stop()
-        
-        # ====== ПРИОРИТЕТ 2: Переменные окружения .env (локально) ======
-        else:
-            host = os.getenv('DB_HOST', 'localhost')
-            port = int(os.getenv('DB_PORT', 5432))
-            database = os.getenv('DB_NAME', 'olympic_reserve')
-            user = os.getenv('DB_USER', 'postgres')
-            password = os.getenv('DB_PASSWORD', '')
-            
-            if not all([host, user]):
-                st.error("""
-                ❌ **Ошибка конфигурации!**
-                
-                Не найдены параметры БД ни в secrets.toml, ни в переменных окружения.
-                
-                **Локально:** Создайте `.env` файл с параметрами БД
-                **На облаке:** Добавьте secrets.toml в Streamlit Cloud Settings
-                """)
-                st.stop()
-            
-            conn = psycopg2.connect(
-                host=host,
-                port=port,
-                database=database,
-                user=user,
-                password=password,
-                connect_timeout=10
-            )
-            return conn
+        # Используем параметры из переменной выше
+        conn = psycopg2.connect(
+            host=DB_CONFIG['host'],
+            port=DB_CONFIG['port'],
+            database=DB_CONFIG['database'],
+            user=DB_CONFIG['username'],
+            password=DB_CONFIG['password'],
+            connect_timeout=10
+        )
+        return conn
     
     except psycopg2.OperationalError as e:
         error_msg = str(e)
@@ -124,49 +19,42 @@ def get_db_connection():
         st.error(f"""
         ❌ **Ошибка подключения к БД!**
         
-        **Детали ошибки:**
-        {error_msg[:200]}
+        **Детали:** {error_msg[:200]}
         
         **Что проверить:**
         
-        1. ✅ **Хост должен быть Supabase, а не localhost:**
-           - ❌ host = "localhost"
-           - ✅ host = "db.YOUR-ID.supabase.co"
-        
-        2. ✅ **Проверьте формат Connection string:**
-           - На Supabase: Settings → Database → Connection pooling
-           - Должна быть строка вида:
-             `postgresql://postgres:PASSWORD@db.YOUR-ID.supabase.co:5432/postgres`
-        
-        3. ✅ **Распарсьте Connection string правильно:**
-           - host: db.YOUR-ID.supabase.co (между @ и :5432)
-           - port: 5432 (или другой из строки)
-           - database: postgres (обычно)
-           - username: postgres (обычно)
-           - password: (пароль проекта)
-        
-        4. ✅ **На Streamlit Cloud (⚙️ Settings → Secrets):**
-           ```toml
-           [connections.postgresql]
-           host = "db.YOUR-ID.supabase.co"
-           port = 5432
-           database = "postgres"
-           username = "postgres"
-           password = "YOUR_PASSWORD"
+        1. ✅ **В файле utils/database.py найди DB_CONFIG:**
+           ```python
+           DB_CONFIG = {{
+               'host': 'db.bssbrxzbljzanponotmc.supabase.co',
+               'port': 5432,
+               'database': 'postgres',
+               'username': 'postgres',
+               'password': 'Rqyd6a6luT0k35oG',  # ← ЗАМЕНИ!
+           }}
            ```
         
-        5. ✅ **Нажмите Save, затем Reboot app**
+        2. ✅ **Вставь пароль из Supabase:**
+           - https://supabase.com/dashboard
+           - Settings → Database → Connection string
+           - Скопируй пароль (между `:` и `@`)
+        
+        3. ✅ **Проверь параметры:**
+           - host: `db.bssbrxzbljzanponotmc.supabase.co` ✓
+           - database: `postgres` ✓
+           - username: `postgres` ✓
+           - password: твой реальный пароль ✓
+        
+        4. ✅ **Перезагрузи приложение:**
+           - На Streamlit Cloud: ⚙️ Settings → Reboot app
         """)
         st.stop()
     
     except Exception as e:
         st.error(f"""
-        ❌ **Неожиданная ошибка подключения: {e}**
+        ❌ **Неожиданная ошибка: {e}**
         
-        Пожалуйста, проверьте:
-        - Доступность сервера БД (должен быть Supabase, не localhost!)
-        - Правильность параметров в secrets.toml
-        - Правильность логина/пароля
+        Пожалуйста, проверьте параметры в DB_CONFIG
         """)
         st.stop()
 
@@ -330,9 +218,7 @@ def init_database():
 # ==================== ФУНКЦИИ ДЛЯ СПОРТСМЕНОВ ====================
 
 def get_athletes(sport_id=None, region_id=None, status='active'):
-    """
-    Получение списка спортсменов
-    """
+    """Получение списка спортсменов"""
     query = "SELECT * FROM athletes WHERE program_status = %s"
     params = [status]
     
