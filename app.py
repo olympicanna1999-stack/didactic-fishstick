@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from utils.database import (
     init_database, get_athletes, get_athlete_by_id, get_sport_results,
     get_medical_data, get_functional_tests, get_total_athletes, get_total_competitions,
-    get_user_by_username, add_athlete, add_sport_result
+    get_user_by_username, add_athlete, add_sport_result, execute_query
 )
 
 # ==================== КОНФИГУРАЦИЯ ====================
@@ -28,56 +28,54 @@ st.set_page_config(
 sns.set_theme(style="darkgrid")
 plt.rcParams['figure.figsize'] = (12, 6)
 
-# ==================== ИНИЦИАЛИЗАЦИЯ ====================
-
-if 'db_initialized' not in st.session_state:
-    init_database()
-    add_mock_data()  # Добавляем мок-данные
-    st.session_state.db_initialized = True
-
 # ==================== МОК-ДАННЫЕ ====================
 
 def add_mock_data():
     """Добавляет расширенные мок-данные"""
-    from utils.database import execute_update
-    
-    # Больше спортсменов
-    athletes_data = [
-        ('Александр', 'Смирнов', '2003-02-14', 'М', 'active'),
-        ('Мария', 'Волкова', '2004-05-20', 'Ж', 'active'),
-        ('Сергей', 'Куznetsov', '2005-08-10', 'М', 'active'),
-        ('Екатерина', 'Соколова', '2004-11-25', 'Ж', 'active'),
-        ('Дмитрий', 'Морозов', '2006-03-18', 'М', 'active'),
-        ('Анастасия', 'Леонова', '2005-06-30', 'Ж', 'active'),
-        ('Никита', 'Орлов', '2003-09-12', 'М', 'active'),
-        ('Валерия', 'Лебедева', '2004-12-08', 'Ж', 'active'),
-        ('Максим', 'Зайцев', '2005-01-22', 'М', 'active'),
-        ('Дарья', 'Новикова', '2006-04-15', 'Ж', 'active'),
-    ]
     
     # Проверяем количество спортсменов
-    from utils.database import execute_query
     athletes_count = execute_query("SELECT COUNT(*) as count FROM athletes").iloc[0]['count']
     
     if athletes_count <= 3:
+        # Больше спортсменов
+        athletes_data = [
+            ('Александр', 'Смирнов', '2003-02-14', 'М', 'active'),
+            ('Мария', 'Волкова', '2004-05-20', 'Ж', 'active'),
+            ('Сергей', 'Kuznetsov', '2005-08-10', 'М', 'active'),
+            ('Екатерина', 'Соколова', '2004-11-25', 'Ж', 'active'),
+            ('Дмитрий', 'Морозов', '2006-03-18', 'М', 'active'),
+            ('Анастасия', 'Леонова', '2005-06-30', 'Ж', 'active'),
+            ('Никита', 'Орлов', '2003-09-12', 'М', 'active'),
+            ('Валерия', 'Лебедева', '2004-12-08', 'Ж', 'active'),
+            ('Максим', 'Зайцев', '2005-01-22', 'М', 'active'),
+            ('Дарья', 'Новикова', '2006-04-15', 'Ж', 'active'),
+        ]
+        
         # Добавляем новых спортсменов
         for first_name, last_name, birth_date, gender, status in athletes_data:
             add_athlete(first_name, last_name, birth_date, gender, status)
         
         # Добавляем результаты соревнований
         competitions = [
-            (1, 'Чемпионат России', '2025-01-15', 'Классический стиль', '1:23:45', 1, True),
-            (1, 'Кубок России', '2025-02-10', 'Свободный стиль', '1:20:30', 2, False),
-            (2, 'Чемпионат России', '2025-01-16', 'Классический стиль', '1:35:20', 3, False),
-            (2, 'Чемпионат мира', '2024-12-01', 'Спринт', '0:42:10', 5, False),
-            (3, 'Кубок России', '2025-02-11', 'Классический стиль', '1:25:15', 2, True),
-            (4, 'Чемпионат России', '2025-01-17', 'Свободный стиль', '1:38:45', 4, False),
-            (5, 'Кубок России', '2025-02-12', 'Спринт', '0:43:30', 3, False),
-            (6, 'Чемпионат мира', '2024-12-02', 'Классический стиль', '1:36:00', 2, True),
+            (1, 'Чемпионат России', '2025-01-15', 'Классический стиль', '1:23:45', 1),
+            (1, 'Кубок России', '2025-02-10', 'Свободный стиль', '1:20:30', 2),
+            (2, 'Чемпионат России', '2025-01-16', 'Классический стиль', '1:35:20', 3),
+            (2, 'Чемпионат мира', '2024-12-01', 'Спринт', '0:42:10', 5),
+            (3, 'Кубок России', '2025-02-11', 'Классический стиль', '1:25:15', 2),
+            (4, 'Чемпионат России', '2025-01-17', 'Свободный стиль', '1:38:45', 4),
+            (5, 'Кубок России', '2025-02-12', 'Спринт', '0:43:30', 3),
+            (6, 'Чемпионат мира', '2024-12-02', 'Классический стиль', '1:36:00', 2),
         ]
         
-        for athlete_id, comp_name, comp_date, discipline, result, place, pb in competitions:
+        for athlete_id, comp_name, comp_date, discipline, result, place in competitions:
             add_sport_result(athlete_id, comp_name, comp_date, discipline, result, place)
+
+# ==================== ИНИЦИАЛИЗАЦИЯ ====================
+
+if 'db_initialized' not in st.session_state:
+    init_database()
+    add_mock_data()  # Добавляем мок-данные ПОСЛЕ определения функции
+    st.session_state.db_initialized = True
 
 # ==================== ГЛАВНАЯ СТРАНИЦА ====================
 
@@ -247,22 +245,28 @@ def show_analytics_page():
         col1, col2 = st.columns(2)
         
         with col1:
-            gender_counts = athletes['gender'].value_counts()
-            fig, ax = plt.subplots(figsize=(8, 5))
-            colors = ['#FF6B9D', '#4ECDC4']
-            ax.pie(gender_counts, labels=['Мужчины' if x == 'М' else 'Женщины' for x in gender_counts.index], 
-                   autopct='%1.1f%%', colors=colors, startangle=90)
-            ax.set_title("Распределение по полу")
-            st.pyplot(fig)
+            if not athletes.empty:
+                gender_counts = athletes['gender'].value_counts()
+                fig, ax = plt.subplots(figsize=(8, 5))
+                colors = ['#FF6B9D', '#4ECDC4']
+                ax.pie(gender_counts, labels=['Мужчины' if x == 'М' else 'Женщины' for x in gender_counts.index], 
+                       autopct='%1.1f%%', colors=colors, startangle=90)
+                ax.set_title("Распределение по полу")
+                st.pyplot(fig)
+            else:
+                st.info("Нет данных")
         
         with col2:
-            status_counts = athletes['program_status'].value_counts()
-            fig, ax = plt.subplots(figsize=(8, 5))
-            ax.bar(status_counts.index, status_counts.values, color=['#2ECC71', '#E74C3C'])
-            ax.set_title("Статус спортсменов")
-            ax.set_xlabel("Статус")
-            ax.set_ylabel("Количество")
-            st.pyplot(fig)
+            if not athletes.empty:
+                status_counts = athletes['program_status'].value_counts()
+                fig, ax = plt.subplots(figsize=(8, 5))
+                ax.bar(status_counts.index, status_counts.values, color=['#2ECC71', '#E74C3C'])
+                ax.set_title("Статус спортсменов")
+                ax.set_xlabel("Статус")
+                ax.set_ylabel("Количество")
+                st.pyplot(fig)
+            else:
+                st.info("Нет данных")
     
     with tab2:
         st.subheader("Результаты соревнований")
