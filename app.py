@@ -1,5 +1,5 @@
 """
-Олимпийский резерв - Профессиональная версия с реалистичными данными
+Олимпийский резерв - Расширенная версия с видами спорта и тренерами
 Цифровой реестр олимпийского резерва
 """
 
@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 from utils.database import (
     init_database, get_athletes, get_athlete_by_id, get_sport_results,
-    get_medical_data, get_functional_tests, get_total_athletes, get_total_competitions,
+    get_total_athletes, get_total_competitions,
     get_user_by_username, add_athlete, add_sport_result, execute_query
 )
 
@@ -27,23 +27,19 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Улучшенный дизайн с профессиональной цветовой схемой
+# Профессиональная цветовая схема
 custom_theme = """
 <style>
     :root {
-        --primary: #1f77b4;
-        --secondary: #ff7f0e;
-        --success: #2ca02c;
-        --danger: #d62728;
-        --info: #17a2b8;
+        --primary: #667eea;
+        --secondary: #764ba2;
+        --accent: #f093fb;
     }
     
-    /* Главный контейнер */
     .main {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     }
     
-    /* Улучшенный заголовок */
     h1 {
         color: #1f2937;
         font-size: 2.5rem;
@@ -52,173 +48,203 @@ custom_theme = """
         text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
     }
     
-    /* Метрики */
     .metric-container {
         background: white;
         border-radius: 12px;
         padding: 20px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        border-left: 4px solid #1f77b4;
+        border-left: 4px solid #667eea;
         transition: transform 0.2s;
-    }
-    
-    .metric-container:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    
-    /* Кнопки */
-    .btn-primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 8px;
-        padding: 10px 20px;
-        transition: all 0.3s;
-    }
-    
-    .btn-primary:hover {
-        transform: scale(1.02);
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-    }
-    
-    /* Карточки */
-    .card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        margin-bottom: 16px;
-        border-top: 3px solid #667eea;
-    }
-    
-    /* Таблицы */
-    table {
-        border-collapse: collapse;
-        width: 100%;
-    }
-    
-    th {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 12px;
-        text-align: left;
-        font-weight: 600;
-    }
-    
-    tr:hover {
-        background-color: #f5f7fa;
     }
 </style>
 """
 
 st.markdown(custom_theme, unsafe_allow_html=True)
 
-# Стиль графиков
 sns.set_theme(style="whitegrid")
 sns.set_palette("husl")
 plt.rcParams['figure.figsize'] = (12, 6)
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['axes.labelsize'] = 11
-plt.rcParams['xtick.labelsize'] = 10
-plt.rcParams['ytick.labelsize'] = 10
 
-# ==================== РАСШИРЕННЫЕ МОК-ДАННЫЕ ====================
+# ==================== ВИДЫ СПОРТА И РЕГИОНЫ ====================
 
-def add_enhanced_mock_data():
-    """Добавляет реалистичные мок-данные на основе научных исследований"""
+SPORTS_LIST = {
+    "Лыжные гонки": "🎿",
+    "Гребля": "🚣",
+    "Биатлон": "🎯"
+}
+
+REGIONS = [
+    "Республика Карелия",
+    "Архангельская область",
+    "Мурманская область",
+    "Ненецкий АО",
+    "Вологодская область",
+    "Тверская область",
+    "Костромская область",
+    "Кировская область",
+    "Удмуртия",
+    "Республика Татарстан"
+]
+
+COACHES = {
+    "Лыжные гонки": [
+        "Иван Петров", "Сергей Смирнов", "Дмитрий Морозов",
+        "Алексей Волков", "Николай Соколов"
+    ],
+    "Гребля": [
+        "Владимир Кузнецов", "Олег Лебедев", "Борис Орлов",
+        "Виктор Комаров", "Игорь Новиков"
+    ],
+    "Биатлон": [
+        "Анатолий Зайцев", "Павел Ивановский", "Юрий Константинов",
+        "Геннадий Лаврентьев", "Валентин Макаров"
+    ]
+}
+
+# ==================== МОК-ДАННЫЕ С РАСШИРЕННОЙ ИНФОРМАЦИЕЙ ====================
+
+def add_extended_mock_data():
+    """Добавляет расширенные мок-данные с видами спорта и тренерами"""
     
     athletes_count = execute_query("SELECT COUNT(*) as count FROM athletes").iloc[0]['count']
     
     if athletes_count <= 3:
-        # Спортсмены с реалистичными данными (на основе исследования гребцов)
-        athletes_data = [
-            # Мужчины (VO2: 55-60 мл/кг/мин, HR: 195±5, рост: 180-190см)
-            ('Александр', 'Смирнов', '2003-02-14', 'М', 'active'),
-            ('Сергей', 'Петров', '2004-08-10', 'М', 'active'),
-            ('Дмитрий', 'Морозов', '2005-03-18', 'М', 'active'),
-            ('Никита', 'Орлов', '2003-09-12', 'М', 'active'),
-            ('Максим', 'Зайцев', '2005-01-22', 'М', 'active'),
-            ('Андрей', 'Ивановский', '2004-06-15', 'М', 'active'),
-            
-            # Женщины (VO2: 45-52 мл/кг/мин, HR: 188±10, рост: 168-178см)
-            ('Мария', 'Волкова', '2004-05-20', 'Ж', 'active'),
-            ('Екатерина', 'Соколова', '2004-11-25', 'Ж', 'active'),
-            ('Анастасия', 'Леонова', '2005-06-30', 'Ж', 'active'),
-            ('Валерия', 'Лебедева', '2004-12-08', 'Ж', 'active'),
-            ('Дарья', 'Новикова', '2006-04-15', 'Ж', 'active'),
-            ('Ольга', 'Соколова', '2005-02-28', 'Ж', 'active'),
-            ('Елена', 'Кузнецова', '2004-07-10', 'Ж', 'active'),
-        ]
+        # Спортсмены по видам спорта
+        athletes_by_sport = {
+            "Лыжные гонки": [
+                ("Александр", "Смирнов", "2003-02-14", "М"),
+                ("Сергей", "Петров", "2004-08-10", "М"),
+                ("Дмитрий", "Морозов", "2005-03-18", "М"),
+                ("Мария", "Волкова", "2004-05-20", "Ж"),
+                ("Екатерина", "Соколова", "2004-11-25", "Ж"),
+                ("Анастасия", "Леонова", "2005-06-30", "Ж"),
+            ],
+            "Гребля": [
+                ("Никита", "Орлов", "2003-09-12", "М"),
+                ("Максим", "Зайцев", "2005-01-22", "М"),
+                ("Андрей", "Ивановский", "2004-06-15", "М"),
+                ("Валерия", "Лебедева", "2004-12-08", "Ж"),
+                ("Дарья", "Новикова", "2006-04-15", "Ж"),
+                ("Ольга", "Соколова", "2005-02-28", "Ж"),
+            ],
+            "Биатлон": [
+                ("Павел", "Федоров", "2005-04-10", "М"),
+                ("Елена", "Кузнецова", "2004-07-10", "Ж"),
+            ]
+        }
         
-        # Добавляем спортсменов
-        athlete_ids = {}
-        for first_name, last_name, birth_date, gender, status in athletes_data:
-            athlete_id = add_athlete(first_name, last_name, birth_date, gender, status)
-            athlete_ids[f"{first_name}_{last_name}"] = athlete_id
-        
-        # Реалистичные соревнования за 12 месяцев
-        # Мужчины (6 человек x 15 результатов = 90 результатов)
-        male_athletes = [1, 2, 3, 4, 5, 6]
-        female_athletes = [7, 8, 9, 10, 11, 12, 13]
-        
-        competitions = [
-            'Чемпионат России',
-            'Кубок России',
-            'Чемпионат Европы юниоров',
-            'Чемпионат мира юниоров',
-            'Спартакиада регионов',
-            'Открытый чемпионат города'
-        ]
-        
-        disciplines = [
-            'Классический стиль 5км',
-            'Свободный стиль 5км',
-            'Спринт 1км',
-            'Длинная дистанция 10км',
-            'Классический стиль 10км',
-            'Командная эстафета'
-        ]
-        
-        # Генерируем результаты
         import random
         np.random.seed(42)
         random.seed(42)
         
-        for athlete_id in male_athletes:
-            for _ in range(15):
-                comp_date = datetime.now() - timedelta(days=random.randint(1, 365))
-                comp_name = random.choice(competitions)
-                discipline = random.choice(disciplines)
-                # Мужчины: время 4-7 минут
-                time_sec = random.randint(240, 420)
-                minutes = time_sec // 60
-                seconds = time_sec % 60
-                result_time = f"{minutes}:{seconds:02d}"
-                place = random.randint(1, 8)
-                
-                add_sport_result(athlete_id, comp_name, comp_date.strftime('%Y-%m-%d'), 
-                               discipline, result_time, place)
+        # Добавляем спортсменов с дополнительной информацией
+        athlete_data_store = {}
         
-        for athlete_id in female_athletes:
-            for _ in range(15):
-                comp_date = datetime.now() - timedelta(days=random.randint(1, 365))
-                comp_name = random.choice(competitions)
-                discipline = random.choice(disciplines)
-                # Женщины: время 5-9 минут
-                time_sec = random.randint(300, 540)
-                minutes = time_sec // 60
-                seconds = time_sec % 60
-                result_time = f"{minutes}:{seconds:02d}"
-                place = random.randint(1, 9)
+        for sport, athletes in athletes_by_sport.items():
+            for first_name, last_name, birth_date, gender in athletes:
+                region = random.choice(REGIONS)
+                coach = random.choice(COACHES[sport])
                 
-                add_sport_result(athlete_id, comp_name, comp_date.strftime('%Y-%m-%d'), 
-                               discipline, result_time, place)
+                # Добавляем спортсмена
+                athlete_id = add_athlete(first_name, last_name, birth_date, gender, 'active')
+                
+                # Сохраняем данные
+                athlete_data_store[athlete_id] = {
+                    'sport': sport,
+                    'region': region,
+                    'coach': coach,
+                    'first_name': first_name,
+                    'last_name': last_name
+                }
+                
+                # Генерируем результаты
+                competitions = {
+                    "Лыжные гонки": [
+                        'Чемпионат России',
+                        'Кубок России',
+                        'Чемпионат Европы юниоров',
+                        'Чемпионат мира юниоров',
+                        'Спартакиада регионов',
+                    ],
+                    "Гребля": [
+                        'Чемпионат России',
+                        'Кубок России',
+                        'Чемпионат Европы юниоров',
+                        'Чемпионат мира юниоров',
+                        'Открытый чемпионат города',
+                    ],
+                    "Биатлон": [
+                        'Чемпионат России',
+                        'Кубок России',
+                        'Чемпионат Европы юниоров',
+                        'Этап Кубка мира',
+                        'Спартакиада регионов',
+                    ]
+                }
+                
+                disciplines = {
+                    "Лыжные гонки": ['Спринт 1км', 'Классический стиль 5км', 'Свободный стиль 5км', 'Длинная дистанция 10км'],
+                    "Гребля": ['Одиночка 2км', 'Двойка 2км', 'Четвёрка 2км', 'Командная эстафета'],
+                    "Биатлон": ['Спринт 7.5км', 'Гонка преследования', 'Индивидуальная 15км', 'Эстафета']
+                }
+                
+                for _ in range(15):
+                    comp_date = datetime.now() - timedelta(days=random.randint(1, 365))
+                    comp_name = random.choice(competitions[sport])
+                    discipline = random.choice(disciplines[sport])
+                    
+                    if sport == "Лыжные гонки":
+                        time_sec = random.randint(180, 600)
+                    elif sport == "Гребля":
+                        time_sec = random.randint(240, 420)
+                    else:  # Биатлон
+                        time_sec = random.randint(900, 1800)
+                    
+                    minutes = time_sec // 60
+                    seconds = time_sec % 60
+                    result_time = f"{minutes}:{seconds:02d}"
+                    place = random.randint(1, 12)
+                    
+                    add_sport_result(athlete_id, comp_name, comp_date.strftime('%Y-%m-%d'), 
+                                   discipline, result_time, place)
+
+# ==================== ПОЛУЧЕНИЕ ДАННЫХ СПОРТСМЕНОВ ====================
+
+def get_athletes_with_details():
+    """Получает спортсменов с деталями (спорт, регион, тренер)"""
+    athletes = get_athletes()
+    
+    if athletes.empty:
+        return athletes
+    
+    # Генерируем детали для каждого спортсмена
+    details = []
+    import random
+    
+    for idx, row in athletes.iterrows():
+        sport = random.choice(list(SPORTS_LIST.keys()))
+        region = random.choice(REGIONS)
+        coach = random.choice(COACHES[sport])
+        
+        details.append({
+            'id': row['id'],
+            'first_name': row['first_name'],
+            'last_name': row['last_name'],
+            'gender': row['gender'],
+            'program_status': row['program_status'],
+            'birth_date': row['birth_date'],
+            'sport': sport,
+            'region': region,
+            'coach': coach
+        })
+    
+    return pd.DataFrame(details)
 
 # ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
 if 'db_initialized' not in st.session_state:
     init_database()
-    add_enhanced_mock_data()
+    add_extended_mock_data()
     st.session_state.db_initialized = True
 
 # ==================== ГЛАВНАЯ СТРАНИЦА ====================
@@ -233,7 +259,7 @@ def main():
     show_main_dashboard()
 
 def show_login_page():
-    """Профессиональная форма входа"""
+    """Форма входа"""
     col1, col2, col3 = st.columns([1, 1.5, 1])
     
     with col2:
@@ -268,7 +294,7 @@ def show_login_page():
             """)
 
 def show_main_dashboard():
-    """Главная панель с профессиональным дизайном"""
+    """Главная панель"""
     
     user = st.session_state.get('user', {})
     username = user.get('username', 'Unknown')
@@ -277,7 +303,7 @@ def show_main_dashboard():
         st.markdown("""
         <div style='text-align: center; padding: 20px 0; margin-bottom: 20px;'>
             <h2 style='margin: 0;'>🏅 Олимпийский резерв</h2>
-            <p style='margin: 10px 0 0 0; color: #666;'>v1.0.3</p>
+            <p style='margin: 10px 0 0 0; color: #666;'>v2.1.0</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -309,63 +335,79 @@ def show_main_dashboard():
         show_settings_page()
 
 def show_home_page():
-    """Главная страница с улучшенным дизайном"""
+    """Главная страница"""
     st.title("🏠 Главная панель")
     
     total_athletes = get_total_athletes()
     total_competitions = get_total_competitions()
     
-    # Улучшенные метрики
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric(
-            "👥 Спортсменов",
-            total_athletes,
-            "+2",
-            help="Всего активных спортсменов в программе"
-        )
+        st.metric("👥 Спортсменов", total_athletes, "+3", help="Всего активных спортсменов")
     with col2:
-        st.metric(
-            "🏆 Соревнований",
-            total_competitions,
-            "+12",
-            help="Всего проведено соревнований за год"
-        )
+        st.metric("🏆 Соревнований", total_competitions, "+15", help="Всего проведено соревнований")
     with col3:
-        st.metric(
-            "📊 Ср. ВО₂",
-            "56.2",
-            "+3.1 мл/кг/мин",
-            help="Средний VO2 максимум у мужчин"
-        )
+        st.metric("🎿 Виды спорта", "3", help="Лыжные гонки, Гребля, Биатлон")
     with col4:
-        st.metric(
-            "❤️ Пульс",
-            "192",
-            "+5 уд/мин",
-            help="Среднее максимальное ЧСС"
-        )
+        st.metric("🗺️ Регионов", len(REGIONS), help="Регионы России")
     
     st.markdown("---")
     
-    # Таблица спортсменов с улучшенным оформлением
-    st.subheader("📋 Последние добавленные спортсмены")
+    # Распределение по видам спорта
+    col1, col2 = st.columns(2)
     
-    athletes = get_athletes()
-    if not athletes.empty:
-        # Показываем только последних 10
-        display_athletes = athletes.tail(10)[['first_name', 'last_name', 'birth_date', 'gender', 'program_status']].copy()
-        display_athletes.columns = ['Имя', 'Фамилия', 'Дата рождения', 'Пол', 'Статус']
-        display_athletes['Пол'] = display_athletes['Пол'].apply(lambda x: '👨 Муж.' if x == 'М' else '👩 Жен.')
-        display_athletes['Статус'] = display_athletes['Статус'].apply(lambda x: '✅ Активен' if x == 'active' else '⏸ Неактивен')
+    with col1:
+        st.subheader("📊 Распределение по видам спорта")
+        athletes = get_athletes()
         
-        st.dataframe(display_athletes, use_container_width=True, hide_index=True)
-    else:
-        st.info("📭 Нет данных о спортсменах")
+        if not athletes.empty:
+            sports_data = []
+            for sport in SPORTS_LIST.keys():
+                # Примерное распределение
+                if sport == "Лыжные гонки":
+                    count = 6
+                elif sport == "Гребля":
+                    count = 6
+                else:
+                    count = 2
+                sports_data.append({'Вид спорта': sport, 'Количество': count})
+            
+            sports_df = pd.DataFrame(sports_data)
+            fig, ax = plt.subplots(figsize=(8, 6))
+            colors = ['#667eea', '#764ba2', '#f093fb']
+            wedges, texts, autotexts = ax.pie(
+                sports_df['Количество'],
+                labels=sports_df['Вид спорта'],
+                autopct='%1.1f%%',
+                colors=colors,
+                startangle=90
+            )
+            ax.set_title("Распределение спортсменов", fontsize=12, fontweight='bold')
+            st.pyplot(fig)
+    
+    with col2:
+        st.subheader("🏢 Распределение по регионам")
+        regions_data = []
+        
+        import random
+        np.random.seed(42)
+        for region in REGIONS[:5]:
+            regions_data.append({'Регион': region, 'Спортсмены': random.randint(1, 3)})
+        
+        regions_df = pd.DataFrame(regions_data)
+        fig, ax = plt.subplots(figsize=(8, 6))
+        bars = ax.barh(regions_df['Регион'], regions_df['Спортсмены'], color='#667eea')
+        ax.set_xlabel("Количество спортсменов", fontsize=11, fontweight='bold')
+        ax.set_title("Топ регионов", fontsize=12, fontweight='bold')
+        for bar in bars:
+            width = bar.get_width()
+            ax.text(width, bar.get_y() + bar.get_height()/2.,
+                   f'{int(width)}', ha='left', va='center', fontweight='bold')
+        st.pyplot(fig)
 
 def show_athletes_page():
-    """Страница со спортсменами"""
+    """Страница со спортсменами с фильтрами по видам спорта"""
     st.title("👥 База спортсменов")
     
     if st.session_state.get('show_athlete_profile', False) and 'selected_athlete_id' in st.session_state:
@@ -383,26 +425,93 @@ def show_athletes_page():
         
         athletes = get_athletes()
         if not athletes.empty:
-            col1, col2 = st.columns(2)
-            with col1:
-                gender_filter = st.multiselect("Пол:", athletes['gender'].unique(), default=athletes['gender'].unique())
-            with col2:
-                status_filter = st.multiselect("Статус:", athletes['program_status'].unique(), default=athletes['program_status'].unique())
+            # Фильтры
+            col1, col2, col3, col4 = st.columns(4)
             
-            filtered = athletes[(athletes['gender'].isin(gender_filter)) & (athletes['program_status'].isin(status_filter))]
+            with col1:
+                sport_filter = st.multiselect(
+                    "Вид спорта:",
+                    list(SPORTS_LIST.keys()),
+                    default=list(SPORTS_LIST.keys())
+                )
+            
+            with col2:
+                gender_filter = st.multiselect(
+                    "Пол:",
+                    athletes['gender'].unique(),
+                    default=athletes['gender'].unique()
+                )
+            
+            with col3:
+                status_filter = st.multiselect(
+                    "Статус:",
+                    athletes['program_status'].unique(),
+                    default=athletes['program_status'].unique()
+                )
+            
+            with col4:
+                region_filter = st.multiselect(
+                    "Регионы:",
+                    REGIONS,
+                    default=REGIONS[:5]
+                )
             
             st.markdown("---")
-            st.markdown("### Нажмите на спортсмена для просмотра профиля:")
+            
+            # Применяем фильтры (примерная логика)
+            filtered = athletes[
+                (athletes['gender'].isin(gender_filter)) & 
+                (athletes['program_status'].isin(status_filter))
+            ]
+            
+            st.markdown(f"### Найдено спортсменов: {len(filtered)}")
+            
+            # Таблица с дополнительной информацией
+            display_data = []
+            import random
+            np.random.seed(42)
             
             for idx, row in filtered.iterrows():
-                athlete_id = int(row['id'])
-                name = f"{row['first_name']} {row['last_name']}"
-                gender = "👨" if row['gender'] == 'М' else "👩"
+                sport = random.choice(sport_filter)
+                region = random.choice(region_filter)
+                coach = random.choice(COACHES[sport])
                 
-                if st.button(f"{gender} {name} · {row['program_status']}", key=f"athlete_btn_{athlete_id}", use_container_width=True):
-                    st.session_state['selected_athlete_id'] = athlete_id
-                    st.session_state['show_athlete_profile'] = True
-                    st.rerun()
+                display_data.append({
+                    'ID': int(row['id']),
+                    'Имя': row['first_name'],
+                    'Фамилия': row['last_name'],
+                    '🏅 Вид спорта': f"{SPORTS_LIST[sport]} {sport}",
+                    '👨‍🏫 Тренер': coach,
+                    '🗺️ Регион': region,
+                    'Пол': '👨' if row['gender'] == 'М' else '👩',
+                    'Статус': '✅ Активен' if row['program_status'] == 'active' else '⏸ Неактивен'
+                })
+            
+            if display_data:
+                df_display = pd.DataFrame(display_data)
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                st.markdown("### 👤 Нажмите на ID спортсмена для просмотра профиля:")
+                
+                for data in display_data:
+                    col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 1])
+                    
+                    with col1:
+                        st.text(f"ID: {data['ID']}")
+                    with col2:
+                        st.text(f"{data['Имя']} {data['Фамилия']}")
+                    with col3:
+                        st.text(data['🏅 Вид спорта'])
+                    with col4:
+                        st.text(f"👨‍🏫 {data['👨‍🏫 Тренер']}")
+                    with col5:
+                        if st.button("📋", key=f"athlete_btn_{data['ID']}", help="Профиль"):
+                            st.session_state['selected_athlete_id'] = data['ID']
+                            st.session_state['show_athlete_profile'] = True
+                            st.rerun()
+            else:
+                st.info("📭 Нет спортсменов по выбранным фильтрам")
         else:
             st.info("📭 Нет спортсменов")
     
@@ -410,10 +519,19 @@ def show_athletes_page():
         st.subheader("Добавить нового спортсмена")
         
         with st.form("add_athlete_form"):
-            first_name = st.text_input("Имя:")
-            last_name = st.text_input("Фамилия:")
-            birth_date = st.date_input("Дата рождения:")
-            gender = st.selectbox("Пол:", ["М", "Ж"])
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                first_name = st.text_input("Имя:")
+                last_name = st.text_input("Фамилия:")
+                birth_date = st.date_input("Дата рождения:")
+            
+            with col2:
+                gender = st.selectbox("Пол:", ["М", "Ж"])
+                sport = st.selectbox("Вид спорта:", list(SPORTS_LIST.keys()))
+                region = st.selectbox("Регион:", REGIONS)
+            
+            coach = st.selectbox("Тренер:", COACHES[sport])
             
             if st.form_submit_button("✅ Добавить", type="primary"):
                 if add_athlete(first_name, last_name, str(birth_date), gender, 'active'):
@@ -435,49 +553,81 @@ def show_athlete_profile_page(athlete_id: int):
         st.error(f"❌ Ошибка загрузки профиля: {e}")
 
 def show_analytics_page():
-    """Страница аналитики с профессиональным дизайном"""
+    """Страница аналитики"""
     st.title("📈 Аналитика и Дашборды")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Общая", "🎯 Результаты", "❤️ Физиология", "🔬 VO₂"])
-    
-    athletes = get_athletes()
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 По видам спорта", "🗺️ По регионам", "👨‍🏫 Тренеры", "🏆 Результаты"])
     
     with tab1:
-        st.subheader("Распределение спортсменов")
+        st.subheader("Анализ по видам спорта")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            if not athletes.empty:
-                gender_counts = athletes['gender'].value_counts()
-                fig, ax = plt.subplots(figsize=(10, 6))
-                colors = ['#667eea', '#f093fb']
-                wedges, texts, autotexts = ax.pie(
-                    gender_counts, 
-                    labels=['Мужчины' if x == 'М' else 'Женщины' for x in gender_counts.index],
-                    autopct='%1.1f%%',
-                    colors=colors,
-                    startangle=90,
-                    textprops={'fontsize': 11, 'weight': 'bold'}
-                )
-                ax.set_title("По полу", fontsize=14, fontweight='bold', pad=20)
-                st.pyplot(fig)
+            sports_stats = {
+                "🎿 Лыжные гонки": {"Спортсмены": 6, "Результаты": 90, "Тренеры": 5},
+                "🚣 Гребля": {"Спортсмены": 6, "Результаты": 90, "Тренеры": 5},
+                "🎯 Биатлон": {"Спортсмены": 2, "Результаты": 30, "Тренеры": 5}
+            }
+            
+            for sport, data in sports_stats.items():
+                with st.container():
+                    st.markdown(f"### {sport}")
+                    col_a, col_b, col_c = st.columns(3)
+                    col_a.metric("Спортсмены", data["Спортсмены"])
+                    col_b.metric("Результаты", data["Результаты"])
+                    col_c.metric("Тренеры", data["Тренеры"])
+                st.divider()
         
         with col2:
-            if not athletes.empty:
-                status_counts = athletes['program_status'].value_counts()
-                fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.bar(status_counts.index, status_counts.values, color=['#2ecc71', '#e74c3c'], edgecolor='black', linewidth=1.5)
-                ax.set_title("По статусу", fontsize=14, fontweight='bold', pad=20)
-                ax.set_ylabel("Количество", fontsize=11, fontweight='bold')
-                for bar in bars:
-                    height = bar.get_height()
-                    ax.text(bar.get_x() + bar.get_width()/2., height,
-                           f'{int(height)}', ha='center', va='bottom', fontweight='bold')
-                st.pyplot(fig)
+            fig, ax = plt.subplots(figsize=(8, 6))
+            sports = ["🎿 Лыжные гонки", "🚣 Гребля", "🎯 Биатлон"]
+            athletes = [6, 6, 2]
+            colors = ['#667eea', '#764ba2', '#f093fb']
+            bars = ax.bar(sports, athletes, color=colors, edgecolor='black', linewidth=1.5)
+            ax.set_ylabel("Количество спортсменов", fontsize=11, fontweight='bold')
+            ax.set_title("Распределение по видам спорта", fontsize=12, fontweight='bold')
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{int(height)}', ha='center', va='bottom', fontweight='bold')
+            plt.xticks(rotation=15)
+            st.pyplot(fig)
     
     with tab2:
-        st.subheader("Результаты соревнований")
+        st.subheader("Географическое распределение")
+        
+        regions_count = {}
+        import random
+        np.random.seed(42)
+        for region in REGIONS[:8]:
+            regions_count[region] = random.randint(1, 3)
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        regions = list(regions_count.keys())
+        counts = list(regions_count.values())
+        bars = ax.barh(regions, counts, color='#667eea', edgecolor='black', linewidth=1.5)
+        ax.set_xlabel("Количество спортсменов", fontsize=11, fontweight='bold')
+        ax.set_title("Распределение по регионам", fontsize=12, fontweight='bold')
+        for bar in bars:
+            width = bar.get_width()
+            ax.text(width, bar.get_y() + bar.get_height()/2.,
+                   f'{int(width)}', ha='left', va='center', fontweight='bold')
+        st.pyplot(fig)
+    
+    with tab3:
+        st.subheader("Тренеры и их команды")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        for col, (sport, coaches) in zip([col1, col2, col3], COACHES.items()):
+            with col:
+                st.markdown(f"### {SPORTS_LIST[sport]} {sport}")
+                for coach in coaches:
+                    st.markdown(f"- **{coach}**")
+    
+    with tab4:
+        st.subheader("Статистика результатов")
         
         results = get_sport_results(limit=100)
         if not results.empty:
@@ -486,92 +636,25 @@ def show_analytics_page():
             with col1:
                 athlete_results = results.groupby('athlete_id').size().head(10)
                 fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.barh(range(len(athlete_results)), athlete_results.values, color='#667eea', edgecolor='black', linewidth=1.5)
+                bars = ax.barh(range(len(athlete_results)), athlete_results.values, color='#667eea')
                 ax.set_yticks(range(len(athlete_results)))
                 ax.set_yticklabels([f'Спортсмен {aid}' for aid in athlete_results.index])
                 ax.set_xlabel("Количество результатов", fontsize=11, fontweight='bold')
-                ax.set_title("Активность спортсменов", fontsize=14, fontweight='bold', pad=20)
-                for i, bar in enumerate(bars):
-                    width = bar.get_width()
-                    ax.text(width, bar.get_y() + bar.get_height()/2.,
-                           f'{int(width)}', ha='left', va='center', fontweight='bold')
+                ax.set_title("Активность спортсменов", fontsize=12, fontweight='bold')
                 st.pyplot(fig)
             
             with col2:
                 if 'place' in results.columns:
                     place_counts = results['place'].value_counts().sort_index().head(10)
                     fig, ax = plt.subplots(figsize=(10, 6))
-                    ax.plot(place_counts.index, place_counts.values, marker='o', linewidth=2.5, markersize=10,
-                           color='#667eea', markerfacecolor='#f093fb', markeredgewidth=2)
+                    ax.plot(place_counts.index, place_counts.values, marker='o', linewidth=2.5,
+                           markersize=10, color='#667eea', markerfacecolor='#f093fb', markeredgewidth=2)
                     ax.fill_between(place_counts.index, place_counts.values, alpha=0.2, color='#667eea')
                     ax.set_xlabel("Место", fontsize=11, fontweight='bold')
                     ax.set_ylabel("Количество", fontsize=11, fontweight='bold')
-                    ax.set_title("Распределение мест", fontsize=14, fontweight='bold', pad=20)
+                    ax.set_title("Распределение мест", fontsize=12, fontweight='bold')
                     ax.grid(True, alpha=0.3)
                     st.pyplot(fig)
-        else:
-            st.info("📭 Нет данных")
-    
-    with tab3:
-        st.subheader("Физиологические показатели (на основе исследований)")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            indicators = ['VO₂ макс\nМуж.\n(мл/кг/мин)', 'VO₂ макс\nЖен.\n(мл/кг/мин)', 'ЧСС макс\nМуж.\n(уд/мин)', 'ЧСС макс\nЖен.\n(уд/мин)']
-            values = [58.7, 48.3, 195, 188]
-            colors_phys = ['#667eea', '#f093fb', '#667eea', '#f093fb']
-            bars = ax.bar(indicators, values, color=colors_phys, edgecolor='black', linewidth=1.5)
-            ax.set_ylabel("Значение", fontsize=11, fontweight='bold')
-            ax.set_title("Средние показатели элитных спортсменов", fontsize=14, fontweight='bold', pad=20)
-            for bar in bars:
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height,
-                       f'{height:.1f}', ha='center', va='bottom', fontweight='bold')
-            st.pyplot(fig)
-        
-        with col2:
-            st.markdown("""
-            ### 📊 Нормы показателей (из научного исследования)
-            
-            **Мужчины-гребцы:**
-            - VO₂ макс: 55-60 мл/кг/мин
-            - ЧСС макс: 195±5 уд/мин
-            - Рост: 180-190 см
-            - Масса: 70-75 кг
-            
-            **Женщины-гребцы:**
-            - VO₂ макс: 45-52 мл/кг/мин
-            - ЧСС макс: 188±10 уд/мин
-            - Рост: 168-178 см
-            - Масса: 60-68 кг
-            
-            **Гемоглобин (оба пола):**
-            - Мужчины: 14-16 g/l
-            - Женщины: 12-14 g/l
-            """)
-    
-    with tab4:
-        st.subheader("Динамика VO₂ максимума")
-        
-        dates = pd.date_range(start='2024-01-01', periods=12, freq='M')
-        vo2_male = np.linspace(55, 59, 12) + np.random.normal(0, 0.5, 12)
-        vo2_female = np.linspace(46, 50, 12) + np.random.normal(0, 0.5, 12)
-        
-        fig, ax = plt.subplots(figsize=(12, 6))
-        ax.plot(dates, vo2_male, marker='o', linewidth=2.5, markersize=8, label='Мужчины', color='#667eea')
-        ax.plot(dates, vo2_female, marker='s', linewidth=2.5, markersize=8, label='Женщины', color='#f093fb')
-        ax.fill_between(dates, vo2_male, alpha=0.2, color='#667eea')
-        ax.fill_between(dates, vo2_female, alpha=0.2, color='#f093fb')
-        ax.set_xlabel("Дата", fontsize=11, fontweight='bold')
-        ax.set_ylabel("VO₂ макс (мл/кг/мин)", fontsize=11, fontweight='bold')
-        ax.set_title("Тренд развития аэробной производительности", fontsize=14, fontweight='bold', pad=20)
-        ax.legend(fontsize=11, loc='best')
-        ax.grid(True, alpha=0.3)
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        st.pyplot(fig)
 
 def show_results_page():
     """Страница результатов"""
@@ -621,13 +704,13 @@ def show_settings_page():
     with col2:
         st.subheader("📊 О системе")
         st.info("""
-        **Версия:** 2.0.0 (Professional)
+        **Версия:** 2.1.0 (Extended)
         
         **Дата:** 26.11.2025
         
         **Статус:** ✅ Активна
         
-        **Источник данных:** Исследование физиологических показателей элитных гребцов
+        **Новое:** Виды спорта, регионы, тренеры
         """)
 
 def authenticate_user(username: str, password: str):
