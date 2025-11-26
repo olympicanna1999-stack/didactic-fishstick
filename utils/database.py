@@ -1,6 +1,6 @@
 """
 Модуль работы с базой данных SQLite (ЛОКАЛЬНАЯ БД - БЕЗ ИНТЕРНЕТА)
-Цифровой реестр олимпийского резерва
+ИСПРАВЛЕННАЯ ВЕРСИЯ: Без проблем с threading
 
 ПРЕИМУЩЕСТВА:
 ✅ Работает БЕЗ интернета
@@ -8,33 +8,37 @@
 ✅ Нет ошибок подключения
 ✅ Быстрее чем Supabase
 ✅ Все работает локально
+✅ Исправлены проблемы с threading
 """
 
 import streamlit as st
 import pandas as pd
 import sqlite3
-import os
 from pathlib import Path
 import bcrypt
 
 # Путь к БД (в папке проекта)
 DB_PATH = Path('olympic_reserve.db')
 
-@st.cache_resource
 def get_db_connection():
-    """Получение подключения к SQLite"""
+    """Получение подключения к SQLite (БЕЗ кэширования!)"""
     try:
-        conn = sqlite3.connect(str(DB_PATH))
+        # ВАЖНО: Не используем @st.cache_resource для sqlite3
+        # так как это вызывает проблемы с threading
+        conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
     except Exception as e:
         st.error(f"❌ Ошибка подключения к БД: {e}")
-        st.stop()
+        return None
 
 def execute_query(query: str, params=None):
-    """Выполнение SQL запроса"""
+    """Выполнение SELECT запроса"""
     try:
         conn = get_db_connection()
+        if conn is None:
+            return pd.DataFrame()
+        
         if params:
             df = pd.read_sql(query, conn, params=params)
         else:
@@ -49,6 +53,9 @@ def execute_update(query: str, params=None):
     """Выполнение UPDATE/INSERT/DELETE"""
     try:
         conn = get_db_connection()
+        if conn is None:
+            return False
+        
         cursor = conn.cursor()
         if params:
             cursor.execute(query, params)
@@ -65,9 +72,10 @@ def init_database():
     """Инициализация БД - создаёт таблицы и добавляет тестовые данные"""
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        if conn is None:
+            return False
         
-        st.info("📊 Инициализация локальной БД SQLite...")
+        cursor = conn.cursor()
         
         # 1. Таблица пользователей
         cursor.execute("""
@@ -179,8 +187,6 @@ def init_database():
         
         if user_count == 0:
             # Добавляем тестовые пользователи
-            st.info("✅ Создание тестовых пользователей...")
-            
             admin_hash = bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode()
             curator_hash = bcrypt.hashpw(b'curator123', bcrypt.gensalt()).decode()
             athlete_hash = bcrypt.hashpw(b'athlete123', bcrypt.gensalt()).decode()
