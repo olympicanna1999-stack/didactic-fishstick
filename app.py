@@ -74,7 +74,7 @@ def add_mock_data():
 
 if 'db_initialized' not in st.session_state:
     init_database()
-    add_mock_data()  # Добавляем мок-данные ПОСЛЕ определения функции
+    add_mock_data()
     st.session_state.db_initialized = True
 
 # ==================== ГЛАВНАЯ СТРАНИЦА ====================
@@ -188,8 +188,18 @@ def show_home_page():
         st.info("📭 Нет данных о спортсменах")
 
 def show_athletes_page():
-    """Страница со спортсменами"""
+    """Страница со спортсменами с профилями"""
     st.title("👥 База спортсменов")
+    
+    # Проверяем есть ли выбранный спортсмен для профиля
+    if st.session_state.get('show_athlete_profile', False) and 'selected_athlete_id' in st.session_state:
+        # Показываем профиль спортсмена
+        show_athlete_profile_page(st.session_state['selected_athlete_id'])
+        
+        if st.button("← Вернуться к списку"):
+            st.session_state['show_athlete_profile'] = False
+            st.rerun()
+        return
     
     tab1, tab2 = st.tabs(["📋 Список", "➕ Добавить"])
     
@@ -208,10 +218,23 @@ def show_athletes_page():
             # Применяем фильтры
             filtered = athletes[(athletes['gender'].isin(gender_filter)) & (athletes['program_status'].isin(status_filter))]
             
-            display_data = filtered[['id', 'first_name', 'last_name', 'birth_date', 'gender', 'program_status']].copy()
-            display_data.columns = ['ID', 'Имя', 'Фамилия', 'Дата рождения', 'Пол', 'Статус']
+            st.markdown("---")
             
-            st.dataframe(display_data, use_container_width=True, hide_index=True)
+            # Показываем спортсменов с кликабельными кнопками
+            st.markdown("### Нажмите на имя спортсмена для просмотра профиля:")
+            
+            for idx, row in filtered.iterrows():
+                athlete_id = int(row['id'])
+                name = f"{row['first_name']} {row['last_name']}"
+                gender = "👨 M" if row['gender'] == 'М' else "👩 Ж"
+                
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    if st.button(f"👤 {name} · {gender} · {row['program_status']}", key=f"athlete_btn_{athlete_id}"):
+                        st.session_state['selected_athlete_id'] = athlete_id
+                        st.session_state['show_athlete_profile'] = True
+                        st.rerun()
         else:
             st.info("📭 Нет спортсменов")
     
@@ -230,6 +253,11 @@ def show_athletes_page():
                     st.rerun()
                 else:
                     st.error("❌ Ошибка при добавлении")
+
+def show_athlete_profile_page(athlete_id: int):
+    """Показывает полный профиль спортсмена"""
+    from athlete_profile import show_athlete_profile
+    show_athlete_profile(athlete_id)
 
 def show_analytics_page():
     """Страница аналитики с графиками"""
@@ -276,7 +304,6 @@ def show_analytics_page():
             col1, col2 = st.columns(2)
             
             with col1:
-                # Количество участий по спортсменам
                 athlete_results = results.groupby('athlete_id').size().head(10)
                 fig, ax = plt.subplots(figsize=(10, 6))
                 ax.barh(range(len(athlete_results)), athlete_results.values, color='#3498DB')
@@ -287,7 +314,6 @@ def show_analytics_page():
                 st.pyplot(fig)
             
             with col2:
-                # Распределение по местам
                 if 'place' in results.columns:
                     fig, ax = plt.subplots(figsize=(10, 6))
                     place_counts = results['place'].value_counts().sort_index().head(10)
@@ -307,7 +333,6 @@ def show_analytics_page():
         col1, col2 = st.columns(2)
         
         with col1:
-            # Средние показатели
             fig, ax = plt.subplots(figsize=(10, 6))
             indicators = ['Гемоглобин\n(g/l)', 'Гематокрит\n(%)', 'ВО₂ макс\n(мл/мин/кг)']
             values = [145, 42, 65]
@@ -325,7 +350,6 @@ def show_analytics_page():
     with tab4:
         st.subheader("Функциональные тесты")
         
-        # Динамика показателей
         dates = pd.date_range(start='2024-09-01', periods=12, freq='M')
         vo2_data = np.linspace(60, 68, 12) + np.random.normal(0, 1, 12)
         
@@ -347,7 +371,6 @@ def show_results_page():
     results = get_sport_results(limit=100)
     
     if not results.empty:
-        # Фильтры
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -359,14 +382,12 @@ def show_results_page():
         with col3:
             sort_by = st.selectbox("Сортировать по:", ["Дате (новые)", "Месту", "Спортсмену"])
         
-        # Применяем фильтры
         filtered = results
         if comp_filter:
             filtered = filtered[filtered['competition_name'].isin(comp_filter)]
         if disc_filter:
             filtered = filtered[filtered['discipline'].isin(disc_filter)]
         
-        # Сортировка
         if sort_by == "Дате (новые)":
             filtered = filtered.sort_values('competition_date', ascending=False)
         elif sort_by == "Месту":
@@ -390,7 +411,7 @@ def show_settings_page():
     
     with col2:
         st.subheader("📊 О системе")
-        st.info("**Версия:** 1.0.0")
+        st.info("**Версия:** 1.0.1")
         st.info("**Дата:** 26.11.2025")
         st.info("**Статус:** ✅ Активна")
 
