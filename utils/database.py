@@ -1,42 +1,34 @@
 """
-Модуль работы с базой данных PostgreSQL (БЕЗ SECRETS - ПАРАМЕТРЫ В КОДЕ)
+Модуль работы с базой данных SQLite (ЛОКАЛЬНАЯ БД - БЕЗ ИНТЕРНЕТА)
 Цифровой реестр олимпийского резерва
+
+ПРЕИМУЩЕСТВА:
+✅ Работает БЕЗ интернета
+✅ Нет нужды в пароле
+✅ Нет ошибок подключения
+✅ Быстрее чем Supabase
+✅ Все работает локально
 """
 
 import streamlit as st
 import pandas as pd
-import psycopg2
-from psycopg2 import sql
+import sqlite3
 import os
-from dotenv import load_dotenv
+from pathlib import Path
+import bcrypt
 
-# Загружаем переменные окружения
-load_dotenv()
-
-# ====== ПАРАМЕТРЫ ПОДКЛЮЧЕНИЯ (вставь свои!) ======
-DB_CONFIG = {
-    'host': 'db.bssbrxzbljzanponotmc.supabase.co',
-    'port': 5432,
-    'database': 'postgres',
-    'username': 'postgres',
-    'password': 'Rqyd6a6luT0k35oG',
-}
+# Путь к БД (в папке проекта)
+DB_PATH = Path('olympic_reserve.db')
 
 @st.cache_resource
 def get_db_connection():
-    """Получение подключения к PostgreSQL"""
+    """Получение подключения к SQLite"""
     try:
-        conn = psycopg2.connect(
-            host=DB_CONFIG['host'],
-            port=DB_CONFIG['port'],
-            database=DB_CONFIG['database'],
-            user=DB_CONFIG['username'],
-            password=DB_CONFIG['password'],
-            connect_timeout=10
-        )
+        conn = sqlite3.connect(str(DB_PATH))
+        conn.row_factory = sqlite3.Row
         return conn
     except Exception as e:
-        st.error(f"Ошибка подключения: {e}")
+        st.error(f"❌ Ошибка подключения к БД: {e}")
         st.stop()
 
 def execute_query(query: str, params=None):
@@ -44,96 +36,312 @@ def execute_query(query: str, params=None):
     try:
         conn = get_db_connection()
         if params:
-            result = pd.read_sql(query, conn, params=params)
+            df = pd.read_sql(query, conn, params=params)
         else:
-            result = pd.read_sql(query, conn)
+            df = pd.read_sql(query, conn)
         conn.close()
-        return result
+        return df
     except Exception as e:
-        st.error(f"Ошибка запроса: {e}")
+        st.error(f"❌ Ошибка запроса: {e}")
         return pd.DataFrame()
 
+def execute_update(query: str, params=None):
+    """Выполнение UPDATE/INSERT/DELETE"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"❌ Ошибка: {e}")
+        return False
+
 def init_database():
-    """Инициализация таблиц если их нет"""
+    """Инициализация БД - создаёт таблицы и добавляет тестовые данные"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Таблица пользователей
+        st.info("📊 Инициализация локальной БД SQLite...")
+        
+        # 1. Таблица пользователей
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(100) UNIQUE NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
-            role VARCHAR(50) NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
         
-        # Таблица спортсменов
+        # 2. Таблица спортсменов
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS athletes (
-            id SERIAL PRIMARY KEY,
-            first_name VARCHAR(100) NOT NULL,
-            last_name VARCHAR(100) NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
             birth_date DATE,
-            program_status VARCHAR(50),
+            gender TEXT,
+            program_status TEXT DEFAULT 'active',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
         
-        # Таблица результатов
+        # 3. Таблица результатов соревнований
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS sport_results (
-            id SERIAL PRIMARY KEY,
-            athlete_id INTEGER REFERENCES athletes(id),
-            competition_name VARCHAR(200),
-            result VARCHAR(100),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            athlete_id INTEGER NOT NULL,
+            competition_name TEXT,
+            competition_date DATE,
+            discipline TEXT,
+            result TEXT,
+            place INTEGER,
+            is_personal_best BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(athlete_id) REFERENCES athletes(id)
+        );
+        """)
+        
+        # 4. Таблица функциональных тестов
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS functional_tests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            athlete_id INTEGER NOT NULL,
+            test_date DATE,
+            vo2_max_relative REAL,
+            pano_threshold REAL,
+            max_hr INTEGER,
+            resting_hr INTEGER,
+            weight_kg REAL,
+            body_fat_percent REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(athlete_id) REFERENCES athletes(id)
+        );
+        """)
+        
+        # 5. Таблица медицинских данных
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS medical_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            athlete_id INTEGER NOT NULL,
+            examination_date DATE,
+            hemoglobin_g_l REAL,
+            hematocrit_percent REAL,
+            cleared_for_training BOOLEAN DEFAULT 1,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(athlete_id) REFERENCES athletes(id)
+        );
+        """)
+        
+        # 6. Таблица планов развития
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS development_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            athlete_id INTEGER NOT NULL,
+            plan_date DATE,
+            goals TEXT,
+            status TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(athlete_id) REFERENCES athletes(id)
+        );
+        """)
+        
+        # 7. Таблица видов спорта
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT
+        );
+        """)
+        
+        # 8. Таблица регионов
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS regions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
         );
         """)
         
         conn.commit()
+        
+        # Проверяем есть ли уже данные
+        cursor.execute("SELECT COUNT(*) FROM users;")
+        user_count = cursor.fetchone()[0]
+        
+        if user_count == 0:
+            # Добавляем тестовые пользователи
+            st.info("✅ Создание тестовых пользователей...")
+            
+            admin_hash = bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode()
+            curator_hash = bcrypt.hashpw(b'curator123', bcrypt.gensalt()).decode()
+            athlete_hash = bcrypt.hashpw(b'athlete123', bcrypt.gensalt()).decode()
+            
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                ('admin', admin_hash, 'admin')
+            )
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                ('curator_ski', curator_hash, 'curator')
+            )
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                ('ivanov_a', athlete_hash, 'athlete')
+            )
+            
+            # Добавляем виды спорта
+            sports = [
+                ('Лыжные гонки', 'Циклический зимний вид спорта'),
+                ('Биатлон', 'Циклический вид спорта со стрельбой'),
+                ('Конькобежный спорт', 'Зимний циклический вид спорта'),
+                ('Академическая гребля', 'Водный вид спорта'),
+            ]
+            
+            for name, desc in sports:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO sports (name, description) VALUES (?, ?)",
+                    (name, desc)
+                )
+            
+            # Добавляем регионы
+            regions = ['Московская область', 'Санкт-Петербург', 'Екатеринбург', 'Новосибирск']
+            
+            for region in regions:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO regions (name) VALUES (?)",
+                    (region,)
+                )
+            
+            # Добавляем тестовых спортсменов
+            cursor.execute(
+                """INSERT INTO athletes 
+                   (first_name, last_name, birth_date, gender, program_status) 
+                   VALUES (?, ?, ?, ?, ?)""",
+                ('Иван', 'Иванов', '2005-01-15', 'М', 'active')
+            )
+            cursor.execute(
+                """INSERT INTO athletes 
+                   (first_name, last_name, birth_date, gender, program_status) 
+                   VALUES (?, ?, ?, ?, ?)""",
+                ('Анна', 'Петрова', '2004-03-22', 'Ж', 'active')
+            )
+            cursor.execute(
+                """INSERT INTO athletes 
+                   (first_name, last_name, birth_date, gender, program_status) 
+                   VALUES (?, ?, ?, ?, ?)""",
+                ('Дмитрий', 'Сидоров', '2006-07-10', 'М', 'active')
+            )
+            
+            conn.commit()
+        
         cursor.close()
         conn.close()
+        
         return True
+    
     except Exception as e:
-        st.error(f"Ошибка инициализации: {e}")
+        st.error(f"❌ Ошибка инициализации БД: {e}")
         return False
 
-def get_athletes():
+# ==================== ФУНКЦИИ ДЛЯ СПОРТСМЕНОВ ====================
+
+def get_athletes(status='active'):
     """Получение списка спортсменов"""
-    query = "SELECT * FROM athletes ORDER BY last_name, first_name"
-    return execute_query(query)
+    query = "SELECT * FROM athletes WHERE program_status = ? ORDER BY last_name, first_name"
+    return execute_query(query, [status])
 
 def get_athlete_by_id(athlete_id: int):
     """Получение спортсмена по ID"""
-    query = "SELECT * FROM athletes WHERE id = %s"
+    query = "SELECT * FROM athletes WHERE id = ?"
     return execute_query(query, [athlete_id])
 
-def get_sport_results(athlete_id=None):
+def add_athlete(first_name, last_name, birth_date, gender, status='active'):
+    """Добавление нового спортсмена"""
+    query = """INSERT INTO athletes 
+               (first_name, last_name, birth_date, gender, program_status)
+               VALUES (?, ?, ?, ?, ?)"""
+    return execute_update(query, (first_name, last_name, birth_date, gender, status))
+
+# ==================== ФУНКЦИИ ДЛЯ РЕЗУЛЬТАТОВ ====================
+
+def get_sport_results(athlete_id=None, limit=50):
     """Получение спортивных результатов"""
     if athlete_id:
-        query = "SELECT * FROM sport_results WHERE athlete_id = %s ORDER BY created_at DESC"
+        query = f"SELECT * FROM sport_results WHERE athlete_id = ? ORDER BY competition_date DESC LIMIT {limit}"
         return execute_query(query, [athlete_id])
     else:
-        query = "SELECT * FROM sport_results ORDER BY created_at DESC LIMIT 50"
+        query = f"SELECT * FROM sport_results ORDER BY competition_date DESC LIMIT {limit}"
         return execute_query(query)
+
+def add_sport_result(athlete_id, competition_name, competition_date, discipline, result, place):
+    """Добавление результата"""
+    query = """INSERT INTO sport_results 
+               (athlete_id, competition_name, competition_date, discipline, result, place)
+               VALUES (?, ?, ?, ?, ?, ?)"""
+    return execute_update(query, (athlete_id, competition_name, competition_date, discipline, result, place))
+
+# ==================== ФУНКЦИИ ДЛЯ МЕДИЦИНСКИХ ДАННЫХ ====================
 
 def get_medical_data(athlete_id: int):
     """Получение медицинских данных"""
-    query = "SELECT * FROM athletes WHERE id = %s"
+    query = "SELECT * FROM medical_data WHERE athlete_id = ? ORDER BY examination_date DESC"
     return execute_query(query, [athlete_id])
 
 def get_functional_tests(athlete_id: int):
     """Получение функциональных тестов"""
-    query = "SELECT * FROM athletes WHERE id = %s"
+    query = "SELECT * FROM functional_tests WHERE athlete_id = ? ORDER BY test_date DESC"
     return execute_query(query, [athlete_id])
+
+# ==================== ФУНКЦИИ ДЛЯ СПРАВОЧНИКОВ ====================
 
 def get_sports():
     """Получение видов спорта"""
-    return pd.DataFrame({'id': [1, 2, 3], 'name': ['Лыжные гонки', 'Биатлон', 'Гребля']})
+    query = "SELECT * FROM sports ORDER BY name"
+    return execute_query(query)
 
 def get_regions():
     """Получение регионов"""
-    return pd.DataFrame({'id': [1, 2, 3], 'name': ['Москва', 'СПб', 'Екатеринбург']})
+    query = "SELECT * FROM regions ORDER BY name"
+    return execute_query(query)
+
+# ==================== ФУНКЦИИ ДЛЯ СТАТИСТИКИ ====================
+
+def get_athlete_statistics(athlete_id: int):
+    """Получение статистики спортсмена"""
+    stats = {}
+    
+    comps = execute_query("SELECT COUNT(*) as count FROM sport_results WHERE athlete_id = ?", [athlete_id])
+    stats['total_competitions'] = comps['count'][0] if not comps.empty else 0
+    
+    pbs = execute_query("SELECT COUNT(*) as count FROM sport_results WHERE athlete_id = ? AND is_personal_best = 1", [athlete_id])
+    stats['personal_bests'] = pbs['count'][0] if not pbs.empty else 0
+    
+    places = execute_query("SELECT AVG(place) as avg_place FROM sport_results WHERE athlete_id = ?", [athlete_id])
+    stats['avg_place'] = round(places['avg_place'][0], 2) if not places.empty and places['avg_place'][0] else None
+    
+    return stats
+
+def get_user_by_username(username: str):
+    """Получение пользователя по логину"""
+    query = "SELECT * FROM users WHERE username = ?"
+    result = execute_query(query, [username])
+    return result.to_dict('records')[0] if not result.empty else None
+
+def get_total_athletes():
+    """Общее количество спортсменов"""
+    result = execute_query("SELECT COUNT(*) as count FROM athletes WHERE program_status = 'active'")
+    return result['count'][0] if not result.empty else 0
+
+def get_total_competitions():
+    """Общее количество соревнований"""
+    result = execute_query("SELECT COUNT(*) as count FROM sport_results")
+    return result['count'][0] if not result.empty else 0
