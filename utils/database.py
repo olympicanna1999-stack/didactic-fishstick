@@ -1,5 +1,5 @@
 """
-Модуль работы с базой данных PostgreSQL
+Модуль работы с базой данных PostgreSQL (ИСПРАВЛЕННЫЙ ДЛЯ SUPABASE)
 Цифровой реестр олимпийского резерва
 """
 
@@ -17,51 +17,157 @@ load_dotenv()
 def get_db_connection():
     """
     Получение подключения к PostgreSQL с кэшированием
+    ИСПРАВЛЕНО: Использует параметры из secrets.toml (Streamlit Cloud)
     
     Returns:
         Подключение к БД (psycopg2 connection object)
     """
     try:
-        # Пытаемся получить параметры из secrets.toml (Streamlit Cloud)
+        # ====== ПРИОРИТЕТ 1: Streamlit secrets.toml (Streamlit Cloud) ======
         if hasattr(st, 'secrets') and 'connections' in st.secrets:
-            db_config = st.secrets.connections.postgresql
-            conn = psycopg2.connect(
-                host=db_config.get('host'),
-                port=db_config.get('port', 5432),
-                database=db_config.get('database'),
-                user=db_config.get('username'),
-                password=db_config.get('password')
-            )
-        else:
-            # Иначе используем переменные окружения или значения по умолчанию
-            conn = psycopg2.connect(
-                host=os.getenv('DB_HOST', 'localhost'),
-                port=int(os.getenv('DB_PORT', 5432)),
-                database=os.getenv('DB_NAME', 'olympic_reserve'),
-                user=os.getenv('DB_USER', 'postgres'),
-                password=os.getenv('DB_PASSWORD', '')
-            )
+            try:
+                db_config = st.secrets.connections.postgresql
+                
+                host = db_config.get('host')
+                port = db_config.get('port', 5432)
+                database = db_config.get('database')
+                user = db_config.get('username')
+                password = db_config.get('password')
+                
+                # Дополнительная проверка - не должен быть localhost
+                if host == 'localhost' or host == '127.0.0.1':
+                    st.error("""
+                    ⚠️ **ОШИБКА КОНФИГУРАЦИИ!**
+                    
+                    В secrets.toml указан `host = "localhost"`, но это недопустимо на Streamlit Cloud!
+                    
+                    **Что нужно сделать:**
+                    1. Откройте https://supabase.com и создайте проект
+                    2. Скопируйте Connection string (Settings → Database)
+                    3. На Streamlit Cloud (⚙️ Settings → Secrets) вставьте:
+                    
+                    ```toml
+                    [connections.postgresql]
+                    host = "db.YOUR-ID.supabase.co"
+                    port = 5432
+                    database = "postgres"
+                    username = "postgres"
+                    password = "YOUR_PASSWORD"
+                    ```
+                    
+                    ❌ НЕПРАВИЛЬНО: host = "localhost"
+                    ✅ ПРАВИЛЬНО: host = "db.XXXXX.supabase.co"
+                    """)
+                    st.stop()
+                
+                conn = psycopg2.connect(
+                    host=host,
+                    port=port,
+                    database=database,
+                    user=user,
+                    password=password,
+                    connect_timeout=10
+                )
+                return conn
+            
+            except KeyError as e:
+                st.error(f"""
+                ❌ **Ошибка конфигурации secrets.toml!**
+                
+                Отсутствует параметр: {e}
+                
+                Убедитесь что в Streamlit Cloud (⚙️ Settings → Secrets) есть:
+                
+                ```toml
+                [connections.postgresql]
+                host = "db.YOUR-ID.supabase.co"
+                port = 5432
+                database = "postgres"
+                username = "postgres"
+                password = "YOUR_PASSWORD"
+                ```
+                """)
+                st.stop()
         
-        return conn
+        # ====== ПРИОРИТЕТ 2: Переменные окружения .env (локально) ======
+        else:
+            host = os.getenv('DB_HOST', 'localhost')
+            port = int(os.getenv('DB_PORT', 5432))
+            database = os.getenv('DB_NAME', 'olympic_reserve')
+            user = os.getenv('DB_USER', 'postgres')
+            password = os.getenv('DB_PASSWORD', '')
+            
+            if not all([host, user]):
+                st.error("""
+                ❌ **Ошибка конфигурации!**
+                
+                Не найдены параметры БД ни в secrets.toml, ни в переменных окружения.
+                
+                **Локально:** Создайте `.env` файл с параметрами БД
+                **На облаке:** Добавьте secrets.toml в Streamlit Cloud Settings
+                """)
+                st.stop()
+            
+            conn = psycopg2.connect(
+                host=host,
+                port=port,
+                database=database,
+                user=user,
+                password=password,
+                connect_timeout=10
+            )
+            return conn
     
     except psycopg2.OperationalError as e:
+        error_msg = str(e)
+        
         st.error(f"""
-        ❌ Ошибка подключения к БД: {str(e)[:100]}
+        ❌ **Ошибка подключения к БД!**
         
-        **Проверьте:**
-        1. Доступность сервера БД
-        2. Правильность параметров в secrets.toml или .env
-        3. Правильность логина/пароля
+        **Детали ошибки:**
+        {error_msg[:200]}
         
-        **Параметры подключения:**
-        - Host: {os.getenv('DB_HOST', 'localhost')}
-        - Port: {os.getenv('DB_PORT', 5432)}
-        - Database: {os.getenv('DB_NAME', 'olympic_reserve')}
+        **Что проверить:**
+        
+        1. ✅ **Хост должен быть Supabase, а не localhost:**
+           - ❌ host = "localhost"
+           - ✅ host = "db.YOUR-ID.supabase.co"
+        
+        2. ✅ **Проверьте формат Connection string:**
+           - На Supabase: Settings → Database → Connection pooling
+           - Должна быть строка вида:
+             `postgresql://postgres:PASSWORD@db.YOUR-ID.supabase.co:5432/postgres`
+        
+        3. ✅ **Распарсьте Connection string правильно:**
+           - host: db.YOUR-ID.supabase.co (между @ и :5432)
+           - port: 5432 (или другой из строки)
+           - database: postgres (обычно)
+           - username: postgres (обычно)
+           - password: (пароль проекта)
+        
+        4. ✅ **На Streamlit Cloud (⚙️ Settings → Secrets):**
+           ```toml
+           [connections.postgresql]
+           host = "db.YOUR-ID.supabase.co"
+           port = 5432
+           database = "postgres"
+           username = "postgres"
+           password = "YOUR_PASSWORD"
+           ```
+        
+        5. ✅ **Нажмите Save, затем Reboot app**
         """)
         st.stop()
     
     except Exception as e:
-        st.error(f"❌ Неожиданная ошибка: {e}")
+        st.error(f"""
+        ❌ **Неожиданная ошибка подключения: {e}**
+        
+        Пожалуйста, проверьте:
+        - Доступность сервера БД (должен быть Supabase, не localhost!)
+        - Правильность параметров в secrets.toml
+        - Правильность логина/пароля
+        """)
         st.stop()
 
 def execute_query(query: str, params=None):
@@ -226,14 +332,6 @@ def init_database():
 def get_athletes(sport_id=None, region_id=None, status='active'):
     """
     Получение списка спортсменов
-    
-    Args:
-        sport_id: ID вида спорта (опционально)
-        region_id: ID региона (опционально)
-        status: Статус программы (по умолчанию 'active')
-    
-    Returns:
-        DataFrame со списком спортсменов
     """
     query = "SELECT * FROM athletes WHERE program_status = %s"
     params = [status]
@@ -251,15 +349,7 @@ def get_athletes(sport_id=None, region_id=None, status='active'):
     return execute_query(query, params)
 
 def get_athlete_by_id(athlete_id: int):
-    """
-    Получение спортсмена по ID
-    
-    Args:
-        athlete_id: ID спортсмена
-    
-    Returns:
-        DataFrame с данными спортсмена
-    """
+    """Получение спортсмена по ID"""
     query = """
     SELECT a.*, s.name as sport_name, r.name as region_name
     FROM athletes a
@@ -272,17 +362,7 @@ def get_athlete_by_id(athlete_id: int):
 # ==================== ФУНКЦИИ ДЛЯ РЕЗУЛЬТАТОВ ====================
 
 def get_sport_results(athlete_id=None, sport_id=None, limit=50):
-    """
-    Получение спортивных результатов
-    
-    Args:
-        athlete_id: ID спортсмена (опционально)
-        sport_id: ID вида спорта (опционально)
-        limit: Максимальное количество записей
-    
-    Returns:
-        DataFrame с результатами
-    """
+    """Получение спортивных результатов"""
     query = "SELECT * FROM sport_results WHERE 1=1"
     params = []
     
@@ -300,21 +380,7 @@ def get_sport_results(athlete_id=None, sport_id=None, limit=50):
 
 def add_sport_result(athlete_id: int, competition_name: str, competition_date: str, 
                     discipline: str, result: str, place: int, is_personal_best=False):
-    """
-    Добавление нового спортивного результата
-    
-    Args:
-        athlete_id: ID спортсмена
-        competition_name: Название соревнования
-        competition_date: Дата соревнования
-        discipline: Дисциплина
-        result: Результат
-        place: Место
-        is_personal_best: Личный рекорд?
-    
-    Returns:
-        True если успешно, иначе False
-    """
+    """Добавление нового спортивного результата"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -341,16 +407,7 @@ def add_sport_result(athlete_id: int, competition_name: str, competition_date: s
 # ==================== ФУНКЦИИ ДЛЯ ФУНКЦИОНАЛЬНЫХ ТЕСТОВ ====================
 
 def get_functional_tests(athlete_id: int, limit=50):
-    """
-    Получение функциональных тестов спортсмена
-    
-    Args:
-        athlete_id: ID спортсмена
-        limit: Максимальное количество записей
-    
-    Returns:
-        DataFrame с тестами
-    """
+    """Получение функциональных тестов спортсмена"""
     query = f"""
     SELECT * FROM functional_tests
     WHERE athlete_id = %s
@@ -362,16 +419,7 @@ def get_functional_tests(athlete_id: int, limit=50):
 # ==================== ФУНКЦИИ ДЛЯ МЕДИЦИНСКИХ ДАННЫХ ====================
 
 def get_medical_data(athlete_id: int, limit=50):
-    """
-    Получение медицинских данных спортсмена
-    
-    Args:
-        athlete_id: ID спортсмена
-        limit: Максимальное количество записей
-    
-    Returns:
-        DataFrame с медицинскими данными
-    """
+    """Получение медицинских данных спортсмена"""
     query = f"""
     SELECT * FROM medical_data
     WHERE athlete_id = %s
@@ -383,35 +431,17 @@ def get_medical_data(athlete_id: int, limit=50):
 # ==================== ФУНКЦИИ ДЛЯ СПРАВОЧНИКОВ ====================
 
 def get_sports():
-    """
-    Получение списка видов спорта
-    
-    Returns:
-        DataFrame со списком видов спорта
-    """
+    """Получение списка видов спорта"""
     query = "SELECT * FROM sports ORDER BY name"
     return execute_query(query)
 
 def get_regions():
-    """
-    Получение списка регионов
-    
-    Returns:
-        DataFrame со списком регионов
-    """
+    """Получение списка регионов"""
     query = "SELECT * FROM regions ORDER BY name"
     return execute_query(query)
 
 def get_development_plans(athlete_id: int):
-    """
-    Получение планов развития спортсмена
-    
-    Args:
-        athlete_id: ID спортсмена
-    
-    Returns:
-        DataFrame с планами
-    """
+    """Получение планов развития спортсмена"""
     query = """
     SELECT * FROM development_plans
     WHERE athlete_id = %s
@@ -420,15 +450,7 @@ def get_development_plans(athlete_id: int):
     return execute_query(query, [athlete_id])
 
 def get_documents(athlete_id: int):
-    """
-    Получение документов спортсмена
-    
-    Args:
-        athlete_id: ID спортсмена
-    
-    Returns:
-        DataFrame с документами
-    """
+    """Получение документов спортсмена"""
     query = """
     SELECT * FROM documents
     WHERE athlete_id = %s
@@ -439,51 +461,30 @@ def get_documents(athlete_id: int):
 # ==================== ФУНКЦИИ ДЛЯ СТАТИСТИКИ ====================
 
 def get_athlete_statistics(athlete_id: int):
-    """
-    Получение статистики спортсмена
-    
-    Args:
-        athlete_id: ID спортсмена
-    
-    Returns:
-        Словарь со статистикой
-    """
+    """Получение статистики спортсмена"""
     stats = {}
     
-    # Всего соревнований
     comps = execute_query("SELECT COUNT(*) as count FROM sport_results WHERE athlete_id = %s", [athlete_id])
     stats['total_competitions'] = comps['count'][0] if not comps.empty else 0
     
-    # Личных рекордов
     pbs = execute_query("SELECT COUNT(*) as count FROM sport_results WHERE athlete_id = %s AND is_personal_best = TRUE", [athlete_id])
     stats['personal_bests'] = pbs['count'][0] if not pbs.empty else 0
     
-    # Средний результат (место)
     places = execute_query("SELECT AVG(place) as avg_place FROM sport_results WHERE athlete_id = %s", [athlete_id])
     stats['avg_place'] = round(places['avg_place'][0], 2) if not places.empty and places['avg_place'][0] else None
     
     return stats
 
 def get_sport_statistics(sport_id: int):
-    """
-    Получение статистики по виду спорта
-    
-    Args:
-        sport_id: ID вида спорта
-    
-    Returns:
-        Словарь со статистикой
-    """
+    """Получение статистики по виду спорта"""
     stats = {}
     
-    # Всего спортсменов
     athletes_count = execute_query(
         "SELECT COUNT(*) as count FROM athletes WHERE sport_id = %s AND program_status = 'active'",
         [sport_id]
     )
     stats['total_athletes'] = athletes_count['count'][0] if not athletes_count.empty else 0
     
-    # Всего результатов
     results_count = execute_query(
         """SELECT COUNT(*) as count FROM sport_results sr
            JOIN athletes a ON sr.athlete_id = a.id
