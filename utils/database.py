@@ -19,7 +19,7 @@ DB_CONFIG = {
     'port': 5432,
     'database': 'postgres',
     'username': 'postgres',
-    'password': 'ВСТАВЬ_ПАРОЛЬ',
+    'password': 'Rqyd6a6luT0k35oG',
 }
 
 @st.cache_resource
