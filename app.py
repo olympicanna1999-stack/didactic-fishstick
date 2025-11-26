@@ -8,6 +8,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import sys
+from pathlib import Path
 from datetime import datetime, timedelta
 from utils.database import (
     init_database, get_athletes, get_athlete_by_id, get_sport_results,
@@ -256,8 +258,16 @@ def show_athletes_page():
 
 def show_athlete_profile_page(athlete_id: int):
     """Показывает полный профиль спортсмена"""
-    from athlete_profile import show_athlete_profile
-    show_athlete_profile(athlete_id)
+    try:
+        # Добавляем папку pages в sys.path
+        pages_path = Path(__file__).parent / 'pages'
+        if str(pages_path) not in sys.path:
+            sys.path.insert(0, str(pages_path))
+        
+        from athlete_profile import show_athlete_profile
+        show_athlete_profile(athlete_id)
+    except Exception as e:
+        st.error(f"❌ Ошибка загрузки профиля: {e}")
 
 def show_analytics_page():
     """Страница аналитики с графиками"""
@@ -411,7 +421,7 @@ def show_settings_page():
     
     with col2:
         st.subheader("📊 О системе")
-        st.info("**Версия:** 1.0.1")
+        st.info("**Версия:** 1.0.2")
         st.info("**Дата:** 26.11.2025")
         st.info("**Статус:** ✅ Активна")
 
