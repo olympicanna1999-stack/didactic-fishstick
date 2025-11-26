@@ -25,7 +25,7 @@ DB_CONFIG = {
     'port': 5432,
     'database': 'postgres',
     'username': 'postgres',
-    'password': 'ВСТАВЬ_ПАРОЛЬ_SUPABASE',  # ← ЗАМЕНИ!
+    'password': 'Rqyd6a6luT0k35oG',  # ← ЗАМЕНИ!
 }
 
 def create_tables():
